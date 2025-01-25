@@ -1,0 +1,2 @@
+2024-11-05 22:09:23: Camera enabled
+2024-11-05 22:09:23: Camera image dimensions: Width = 160, Height = 120
