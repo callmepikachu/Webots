@@ -21,10 +21,35 @@ turn_left_motion = Motion("../../motions/TurnLeft40.motion")
 turn_right_motion = Motion("../../motions/TurnRight60.motion")
 Shoot_motion = Motion("../../motions/Shoot.motion")
 
-# 初始化获取机器人和足球位置的节点
-robot_names = ['red1', 'red2', 'red3', 'red4', 'blue1', 'blue2', 'blue3', 'blue4']
-robots = [robot.getFromDef(name) for name in robot_names]
-football = robot.getFromDef('football')
+
+def get_robots_and_football():
+    robot_names  = ['red 1', 'red 2', 'red 3', 'red 4', 'blue 1', 'blue 2', 'blue 3', 'blue 4']
+    football = None
+    robots = {}
+
+    root = robot.getRoot()
+    children = root.getField("children")
+
+    for i in range(children.getCount()):
+        node = children.getMFNode(i)
+
+        # 查找football节点
+        if node.getField("name") and node.getField("name").getSFString() == "football":
+            football = node
+        # 查找指定的机器人节点
+        for name in robot_names:
+            if node.getField("name") and node.getField("name").getSFString() == name:
+                robots[name]=(node)
+
+    if football is None:
+        raise ValueError("Error: Football node not found in the world file.")
+
+    if robots is None or len(robots) == 0:
+        raise ValueError("Error: Robots node not found in the world file.")
+
+    return football, robots
+
+
 
 # 存储位置数据
 positions = {}
@@ -81,18 +106,26 @@ def replace_green_with_red(image):
 
     return output_image, centroid, ball_position
 
+
 # 获取机器人和足球的位置并存储
 def update_positions():
+    football, robots_dict = get_robots_and_football()
+    robots = robots_dict.values()
     global positions
     positions = {}
+
+    # 将 dict_keys 转换为列表以便索引
+    robot_names = list(robots_dict.keys())
+
     for i, r in enumerate(robots):
         if r is not None:
             pos = r.getPosition()
-            positions[robot_names[i]] = pos
-    print("positions is " + str(positions))
+            positions[robot_names[i]] = pos  # 使用 robot_names[i] 作为键
+
     if football is not None:
         football_pos = football.getPosition()
         positions['football'] = football_pos
+
 
 # 打印和存储机器人和足球的坐标
 def log_positions():
