@@ -2,6 +2,9 @@ from controller import Supervisor, Camera, Motion
 import numpy as np
 import cv2
 
+# 球场中点坐标(0,0),红队右底角(-4.5,-3), 左底角(4.5,-3), 蓝队右底角,,, 球门(-4.5,0) , x轴是进攻方向
+
+
 # 时间步长
 TIME_STEP = 16
 
