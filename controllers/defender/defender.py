@@ -21,6 +21,11 @@ cameraTop = robot.getDevice('CameraTop')
 cameraTop.enable(TIME_STEP)
 cameraBottom = robot.getDevice('CameraBottom')
 cameraBottom.enable(TIME_STEP)
+emitter = robot.getDevice("emitter")
+receiver = robot.getDevice("receiver")
+receiver.enable(TIME_STEP)
+
+
 
 motion_forward = Motion("../../motions/Forwards.motion")
 motion_backward = Motion("../../motions/Backwards.motion")
@@ -123,18 +128,77 @@ def update_positions():
     robots = robots_dict.values()
     # 将 dict_keys 转换为列表以便索引
     robot_names = list(robots_dict.keys())
+    robots_msg, football_msg = receive_positions(receiver)
+    # if robots_msg and football_msg:
+    #     # 在这里处理接收到的数据
+    #     print("接收到的机器人坐标和航向: ", robots_msg)
+    #     print("接收到的足球坐标: ", football_msg)
+    # else:
+    #     print("没收到广播")
+
+
 
     for i, r in enumerate(robots):
         if r is not None:
             pos = r.getPosition()
             positions[robot_names[i]] = pos  # 使用 robot_names[i] 作为键
             direction = r.getOrientation()
-            directions[robot_names[i]] = direction
+            R = np.array(direction).reshape(3, 3)
+            yaw = math.atan2(R[1, 0], R[0, 0])  # 绕 Z 轴的偏航角
+            directions[robot_names[i]] = yaw
 
     if football is not None:
         football_pos = football.getPosition()
         positions['football'] = football_pos
 
+    broadcast_positions(emitter, positions, directions)
+
+import json
+
+
+def broadcast_positions(emitter, positions, directions):
+    """
+    广播所有机器人及足球的坐标和航向信息。
+
+    参数:
+    emitter (Emitter): Webots 的发射器设备。
+    positions (dict): 包含所有机器人和足球的坐标，格式为 {'name': [x, y, z], ...}。
+    directions (dict): 包含所有机器人航向，格式为 {'name': yaw, ...}。
+    """
+    data = {"robots": {}, "football": {"position": positions["football"]}}
+
+    # 填充机器人的位置和方向
+    for name, pos in positions.items():
+        if name != "football":  # 排除足球
+            data["robots"][name] = {
+                "position": pos,
+                "direction": directions[name]
+            }
+
+    message = json.dumps(data)  # 将数据序列化为 JSON 字符串
+    emitter.send(message.encode('utf-8'))  # 发送广播
+    print("广播成功: "
+          # , message
+          )
+
+
+def receive_positions(receiver):
+    """
+    接收广播的机器人及足球的坐标和航向信息。
+
+    参数:
+    receiver (Receiver): Webots 的接收器设备。
+
+    返回:
+    tuple: 包含 robots 和 football 的字典。
+    """
+    if receiver.getQueueLength() > 0:
+        message = receiver.getData().decode('utf-8')  # 获取并解码消息
+        data = json.loads(message)  # 将 JSON 字符串解析为字典
+        receiver.nextPacket()  # 清除已处理的数据包
+        print("接收成功: ", data)
+        return data["robots"], data["football"]
+    return None, None
 
 # 打印和存储机器人和足球的坐标
 def log_positions():
@@ -160,7 +224,7 @@ def has_arrived_at_position(target_pos, threshold=0.1):
     dx = target_pos[0] - current_pos[0]
     dy = target_pos[1] - current_pos[1]
     distance = (dx**2 + dy**2) ** 0.5
-    print(f"distance = {distance}")
+    print(f"distance = {distance:.4f}")
     return distance < threshold
 
 # 移动到指定位置
@@ -171,16 +235,7 @@ def move_to_position(target_pos):
     将机器人移动到目标位置，先调整方向，再移动。
     """
     current_pos = positions[me]
-    current_orientation = directions[me]  # 获取当前方向矩阵
-    # current_yaw = math.atan2(current_orientation[1], current_orientation[0])  # 计算当前的航向角（绕 Z 轴）
-    # current_yaw = current_orientation[3]  # 计算当前的航向角（绕 Z 轴）
-    R= np.array(current_orientation).reshape(3, 3)
-    roll = math.atan2(R[2, 1], R[2, 2])  # 绕 X 轴的滚动角
-    yaw = math.atan2(R[1, 0], R[0, 0])  # 绕 Z 轴的偏航角
-    pitch = math.asin(-R[2, 0])  # 绕 Y 轴的俯仰角
-    # print(f"当前航向角is {yaw}")
-    current_yaw = yaw
-    # print(current_orientation)
+    current_yaw = directions[me]  # 获取当前方向矩阵
 
     # 计算目标方向
     dx = target_pos[0] - current_pos[0]
@@ -199,7 +254,7 @@ def move_to_position(target_pos):
 
     # 判断需要左转还是右转
     if abs(delta_yaw) > 1:  # 假设 0.1 弧度内为精度范围
-        print(f"delta_yaw = {delta_yaw}")
+        print(f"delta_yaw = {delta_yaw:.4f}")
         if delta_yaw > 0:
             print("Turning left...")
             turn_left_motion.play()
